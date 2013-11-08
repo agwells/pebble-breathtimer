@@ -111,26 +111,42 @@ void handle_init(AppContextRef ctx) {
 }
 
 void handle_tick(AppContextRef ctxt, PebbleTickEvent *event) {
+    // We no longer care about ticks after the 5 minutes are up, but since I don't know how to unregister
+    // a tick handler, I'll just quit this if we're done
     if (current_breath_action == ACTION_DONE) {
         return;
     }
+
+    // Increment timers
     current_breath_elapsed++;
     total_elapsed++;
 
+    // Check if we need to switch breath phases
     if (current_breath_elapsed >= current_breath_duration) {
+
+        // End of breath-in phase. Change to breath-out
         if (current_breath_action == ACTION_BREATHE_IN) {
             current_breath_action = ACTION_BREATHE_OUT;
             current_breath_duration = DURATION_BREATHE_OUT;
             text_layer_set_text(&instr_layer, "OUT");
             vibes_long_pulse();
+
+        // End of breath-out phase (since I haven't implemented a hold phase yet)
         } else {
+
+            // We only want to end the full exercise on the end of an in-out cycle.
+            // So since we just finished an in-out breathing cycle, we check for
+            // end of the total period now.
             if (total_elapsed >= DURATION_TOTAL) {
+                // End of the full exercise. Set all the displays to whatever we want
+                // and quit so that it doesn't get overwritten
                 current_breath_action = ACTION_DONE;
                 text_layer_set_text(&instr_layer, "DONE");
-//                text_layer_deinit(&total_timer_layer);
-//                text_layer_deinit(&breath_timer_layer);
+                text_layer_set_text(&breathtimer_layer, "0");
                 vibes_double_pulse();
                 return;
+
+            // Not the end of the full exercise, so just move on to the next breath in
             } else {
                 current_breath_action = ACTION_BREATHE_IN;
                 current_breath_duration = DURATION_BREATHE_IN;
@@ -142,9 +158,11 @@ void handle_tick(AppContextRef ctxt, PebbleTickEvent *event) {
         current_breath_elapsed = 0;
     }
 
+    // Display current breath remaining
     itoa(current_breath_duration - current_breath_elapsed, breathstr);
     text_layer_set_text(&breathtimer_layer, breathstr);
 
+    // Display total time remaining
     itoa(DURATION_TOTAL - total_elapsed, totalstr);
     text_layer_set_text(&totaltimer_layer, totalstr);
 
