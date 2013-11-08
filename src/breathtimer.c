@@ -35,9 +35,9 @@ int total_elapsed = 0;
 TextLayer instr_layer;
 TextLayer totaltimer_layer;
 TextLayer breathtimer_layer;
-char totalstr[5] = "300";
-char breathstr[5] = "0";
-  
+char totalstr[5];
+char breathstr[5];
+
 /**
 * Ansi C "itoa" based on Kernighan & Ritchie's "Ansi C":
 */
@@ -47,7 +47,7 @@ void strreverse(char* begin, char* end) {
         aux=*end, *end--=*begin, *begin++=aux;
     }
 }
-  
+
 void itoa(int value, char* str) {
     static char num[] = "0123456789abcdefghijklmnopqrstuvwxyz";
     char* wstr=str;
@@ -58,12 +58,12 @@ void itoa(int value, char* str) {
     if ((sign=value) < 0) {
         value = -value;
     }
-    
+
     // Conversion. Number is reversed.
     do {
         *wstr++ = num[value%base];
     } while(value/=base);
-  
+
     if (sign<0) {
         *wstr++='-';
     }
@@ -77,23 +77,32 @@ void itoa(int value, char* str) {
 void handle_init(AppContextRef ctx) {
 
     window_init(&window, "Breath timer");
-    window_stack_push(&window, true /* Animated */);
-    
+    // The animated wipe uses up the first second on the tick handler, so we need to be inanimate
+    // to make the first breath segment show up correctly
+    window_stack_push(&window, false /* Not animated */);
+
     GFont numfont = fonts_get_system_font(FONT_KEY_BITHAM_42_MEDIUM_NUMBERS);
     GFont textfont = fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD);
-    
+
+    // Initialize the strings that say how much time is remaining
+    itoa(current_breath_duration - current_breath_elapsed, breathstr);
+    itoa(DURATION_TOTAL - total_elapsed, totalstr);
+
+    // The text that says "IN/OUT/DONE"
     text_layer_init(&instr_layer, GRect(0, 0, 144, 50));
     text_layer_set_text_alignment(&instr_layer, GTextAlignmentCenter);
     text_layer_set_text(&instr_layer, "IN");
     text_layer_set_font(&instr_layer, textfont);
     layer_add_child(&window.layer, &instr_layer.layer);
 
+    // Text showing number of seconds remaining in current breath phase
     text_layer_init(&breathtimer_layer, GRect(0, 50, 144, 50));
     text_layer_set_text_alignment(&breathtimer_layer, GTextAlignmentCenter);
     text_layer_set_text(&breathtimer_layer, breathstr);
     text_layer_set_font(&breathtimer_layer, numfont);
     layer_add_child(&window.layer, &breathtimer_layer.layer);
 
+    // Text showing number of seconds remaining in total exercise
     text_layer_init(&totaltimer_layer, GRect(0, 100, 144, 50));
     text_layer_set_text_alignment(&totaltimer_layer, GTextAlignmentCenter);
     text_layer_set_text(&totaltimer_layer, totalstr);
@@ -107,14 +116,14 @@ void handle_tick(AppContextRef ctxt, PebbleTickEvent *event) {
     }
     current_breath_elapsed++;
     total_elapsed++;
-        
+
     if (current_breath_elapsed >= current_breath_duration) {
         if (current_breath_action == ACTION_BREATHE_IN) {
             current_breath_action = ACTION_BREATHE_OUT;
             current_breath_duration = DURATION_BREATHE_OUT;
             text_layer_set_text(&instr_layer, "OUT");
             vibes_long_pulse();
-        } else {            
+        } else {
             if (total_elapsed >= DURATION_TOTAL) {
                 current_breath_action = ACTION_DONE;
                 text_layer_set_text(&instr_layer, "DONE");
@@ -132,10 +141,10 @@ void handle_tick(AppContextRef ctxt, PebbleTickEvent *event) {
         layer_mark_dirty((Layer *)&instr_layer);
         current_breath_elapsed = 0;
     }
-    
-    itoa(current_breath_elapsed + 1, breathstr);
+
+    itoa(current_breath_duration - current_breath_elapsed, breathstr);
     text_layer_set_text(&breathtimer_layer, breathstr);
-    
+
     itoa(DURATION_TOTAL - total_elapsed, totalstr);
     text_layer_set_text(&totaltimer_layer, totalstr);
 
