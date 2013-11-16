@@ -3,26 +3,26 @@
 #include "pebble_fonts.h"
 
 
-#define MY_UUID { 0xC5, 0xB2, 0x81, 0x73, 0x45, 0x19, 0x4A, 0xB6, 0xAD, 0xB1, 0x64, 0x7A, 0x6A, 0x0D, 0x8E, 0x05 }
+#define MY_UUID { 0x8C, 0xC6, 0xAD, 0x63, 0x60, 0xB5, 0x46, 0x93, 0xBC, 0x31, 0x4A, 0x9A, 0xD7, 0x31, 0x19, 0x35 }
 PBL_APP_INFO(MY_UUID,
-             "Breath Timer", "Aaron Wells",
-             1, 11, /* App version */
+             "Breath Timer2", "Aaron Wells",
+             1, 1, /* App version */
              DEFAULT_MENU_ICON,
              APP_INFO_STANDARD_APP);
 
 
 #define ACTION_BREATHE_IN 0
 #define ACTION_BREATHE_OUT 1
-#define ACTION_HOLD_BEFORE_IN 2
-#define ACTION_HOLD_BEFORE_OUT 3
+#define ACTION_HOLD_AFTER_IN 2
+#define ACTION_HOLD_AFTER_OUT 3
 #define ACTION_DONE 4
 
-#define DURATION_BREATHE_IN 7
-#define DURATION_BREATHE_OUT 11
-#define DURATION_HOLD_BEFORE_IN 0
-#define DURATION_HOLD_BEFORE_OUT 0
+#define DURATION_BREATHE_IN 2
+#define DURATION_BREATHE_OUT 2
+#define DURATION_HOLD_AFTER_IN 1
+#define DURATION_HOLD_AFTER_OUT 1
 
-#define DURATION_TOTAL 300 /* The total duration of the exercise in seconds */
+#define DURATION_TOTAL 600 /* The total duration of the exercise in seconds */
 
 Window window;
 
@@ -124,36 +124,47 @@ void handle_tick(AppContextRef ctxt, PebbleTickEvent *event) {
     // Check if we need to switch breath phases
     if (current_breath_elapsed >= current_breath_duration) {
 
-        // End of breath-in phase. Change to breath-out
-        if (current_breath_action == ACTION_BREATHE_IN) {
-            current_breath_action = ACTION_BREATHE_OUT;
-            current_breath_duration = DURATION_BREATHE_OUT;
-            text_layer_set_text(&instr_layer, "OUT");
-            vibes_long_pulse();
-
-        // End of breath-out phase (since I haven't implemented a hold phase yet)
-        } else {
-
-            // We only want to end the full exercise on the end of an in-out cycle.
-            // So since we just finished an in-out breathing cycle, we check for
-            // end of the total period now.
-            if (total_elapsed >= DURATION_TOTAL) {
-                // End of the full exercise. Set all the displays to whatever we want
-                // and quit so that it doesn't get overwritten
-                current_breath_action = ACTION_DONE;
-                text_layer_set_text(&instr_layer, "DONE");
-                text_layer_set_text(&breathtimer_layer, "0");
-                vibes_double_pulse();
-                return;
-
-            // Not the end of the full exercise, so just move on to the next breath in
-            } else {
-                current_breath_action = ACTION_BREATHE_IN;
-                current_breath_duration = DURATION_BREATHE_IN;
-                text_layer_set_text(&instr_layer, "IN");
+        switch(current_breath_action) {
+            // End of breath-in phase. Change to breath-out
+            case ACTION_BREATHE_IN:
+                current_breath_action = ACTION_BREATHE_OUT;
+                current_breath_duration = DURATION_BREATHE_OUT;
+                text_layer_set_text(&instr_layer, "OUT");
                 vibes_short_pulse();
-            }
+                break;
+
+            // End of breath-out phase. Change to hold after out
+            case ACTION_BREATHE_OUT:
+                current_breath_action = ACTION_HOLD_AFTER_OUT;
+                current_breath_duration = DURATION_HOLD_AFTER_OUT;
+                text_layer_set_text(&instr_layer, "HOLD");
+                vibes_short_pulse();
+                break;
+
+            case ACTION_HOLD_AFTER_OUT:
+
+                // We only want to end the full exercise on the end of an in-out cycle.
+                // So since we just finished an in-out breathing cycle, we check for
+                // end of the total period now.
+                if (total_elapsed >= DURATION_TOTAL) {
+                    // End of the full exercise. Set all the displays to whatever we want
+                    // and quit so that it doesn't get overwritten
+                    current_breath_action = ACTION_DONE;
+                    text_layer_set_text(&instr_layer, "DONE");
+                    text_layer_set_text(&breathtimer_layer, "0");
+                    vibes_double_pulse();
+                    return;
+
+                // Not the end of the full exercise, so just move on to the next breath in
+                } else {
+                    current_breath_action = ACTION_BREATHE_IN;
+                    current_breath_duration = DURATION_BREATHE_IN;
+                    text_layer_set_text(&instr_layer, "IN");
+                    vibes_long_pulse();
+                }
+                break;
         }
+
         layer_mark_dirty((Layer *)&instr_layer);
         current_breath_elapsed = 0;
     }
