@@ -1,15 +1,5 @@
-#include "pebble_os.h"
-#include "pebble_app.h"
+#include "pebble.h"
 #include "pebble_fonts.h"
-
-
-#define MY_UUID { 0xC5, 0xB2, 0x81, 0x73, 0x45, 0x19, 0x4A, 0xB6, 0xAD, 0xB1, 0x64, 0x7A, 0x6A, 0x0D, 0x8E, 0x05 }
-PBL_APP_INFO(MY_UUID,
-             "Breath Timer", "Aaron Wells",
-             1, 11, /* App version */
-             DEFAULT_MENU_ICON,
-             APP_INFO_STANDARD_APP);
-
 
 #define ACTION_BREATHE_IN 0
 #define ACTION_BREATHE_OUT 1
@@ -24,7 +14,7 @@ PBL_APP_INFO(MY_UUID,
 
 #define DURATION_TOTAL 300 /* The total duration of the exercise in seconds */
 
-Window window;
+Window *window;
 
 int current_breath_action = ACTION_BREATHE_IN;
 int current_breath_duration = DURATION_BREATHE_IN;
@@ -32,9 +22,9 @@ int current_breath_elapsed = 0;
 
 int total_elapsed = 0;
 
-TextLayer instr_layer;
-TextLayer totaltimer_layer;
-TextLayer breathtimer_layer;
+TextLayer *instr_layer;
+TextLayer *totaltimer_layer;
+TextLayer *breathtimer_layer;
 char totalstr[5];
 char breathstr[5];
 
@@ -74,43 +64,8 @@ void itoa(int value, char* str) {
     strreverse(str,wstr-1);
 }
 
-void handle_init(AppContextRef ctx) {
 
-    window_init(&window, "Breath timer");
-    // The animated wipe uses up the first second on the tick handler, so we need to be inanimate
-    // to make the first breath segment show up correctly
-    window_stack_push(&window, false /* Not animated */);
-
-    GFont numfont = fonts_get_system_font(FONT_KEY_BITHAM_42_MEDIUM_NUMBERS);
-    GFont textfont = fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD);
-
-    // Initialize the strings that say how much time is remaining
-    itoa(current_breath_duration - current_breath_elapsed, breathstr);
-    itoa(DURATION_TOTAL - total_elapsed, totalstr);
-
-    // The text that says "IN/OUT/DONE"
-    text_layer_init(&instr_layer, GRect(0, 0, 144, 50));
-    text_layer_set_text_alignment(&instr_layer, GTextAlignmentCenter);
-    text_layer_set_text(&instr_layer, "IN");
-    text_layer_set_font(&instr_layer, textfont);
-    layer_add_child(&window.layer, &instr_layer.layer);
-
-    // Text showing number of seconds remaining in current breath phase
-    text_layer_init(&breathtimer_layer, GRect(0, 50, 144, 50));
-    text_layer_set_text_alignment(&breathtimer_layer, GTextAlignmentCenter);
-    text_layer_set_text(&breathtimer_layer, breathstr);
-    text_layer_set_font(&breathtimer_layer, numfont);
-    layer_add_child(&window.layer, &breathtimer_layer.layer);
-
-    // Text showing number of seconds remaining in total exercise
-    text_layer_init(&totaltimer_layer, GRect(0, 100, 144, 50));
-    text_layer_set_text_alignment(&totaltimer_layer, GTextAlignmentCenter);
-    text_layer_set_text(&totaltimer_layer, totalstr);
-    text_layer_set_font(&totaltimer_layer, numfont);
-    layer_add_child(&window.layer, &totaltimer_layer.layer);
-}
-
-void handle_tick(AppContextRef ctxt, PebbleTickEvent *event) {
+void handle_second_tick(struct tm *tick_time, TimeUnits units_changed) {
     // We no longer care about ticks after the 5 minutes are up, but since I don't know how to unregister
     // a tick handler, I'll just quit this if we're done
     if (current_breath_action == ACTION_DONE) {
@@ -128,7 +83,7 @@ void handle_tick(AppContextRef ctxt, PebbleTickEvent *event) {
         if (current_breath_action == ACTION_BREATHE_IN) {
             current_breath_action = ACTION_BREATHE_OUT;
             current_breath_duration = DURATION_BREATHE_OUT;
-            text_layer_set_text(&instr_layer, "OUT");
+            text_layer_set_text(instr_layer, "OUT");
             vibes_long_pulse();
 
         // End of breath-out phase (since I haven't implemented a hold phase yet)
@@ -141,8 +96,8 @@ void handle_tick(AppContextRef ctxt, PebbleTickEvent *event) {
                 // End of the full exercise. Set all the displays to whatever we want
                 // and quit so that it doesn't get overwritten
                 current_breath_action = ACTION_DONE;
-                text_layer_set_text(&instr_layer, "DONE");
-                text_layer_set_text(&breathtimer_layer, "0");
+                text_layer_set_text(instr_layer, "DONE");
+                text_layer_set_text(breathtimer_layer, "0");
                 vibes_double_pulse();
                 return;
 
@@ -150,34 +105,75 @@ void handle_tick(AppContextRef ctxt, PebbleTickEvent *event) {
             } else {
                 current_breath_action = ACTION_BREATHE_IN;
                 current_breath_duration = DURATION_BREATHE_IN;
-                text_layer_set_text(&instr_layer, "IN");
+                text_layer_set_text(instr_layer, "IN");
                 vibes_short_pulse();
             }
         }
-        layer_mark_dirty((Layer *)&instr_layer);
+        layer_mark_dirty((Layer *) instr_layer);
         current_breath_elapsed = 0;
     }
 
     // Display current breath remaining
     itoa(current_breath_duration - current_breath_elapsed, breathstr);
-    text_layer_set_text(&breathtimer_layer, breathstr);
+    text_layer_set_text(breathtimer_layer, breathstr);
 
     // Display total time remaining
     itoa(DURATION_TOTAL - total_elapsed, totalstr);
-    text_layer_set_text(&totaltimer_layer, totalstr);
+    text_layer_set_text(totaltimer_layer, totalstr);
 
-    layer_mark_dirty(window_get_root_layer(&window));
+    layer_mark_dirty(window_get_root_layer(window));
 }
 
-void pbl_main(void *params) {
-    AppContextRef ctxt = (AppContextRef) params;
 
-    PebbleAppHandlers handlers = {
-        .init_handler = &handle_init,
-        .tick_info = {
-            .tick_handler = &handle_tick,
-            .tick_units = SECOND_UNIT
-        }
-    };
-    app_event_loop(ctxt, &handlers);
+void handle_init() {
+
+	tick_timer_service_subscribe(SECOND_UNIT, handle_second_tick);
+
+	window = window_create();
+
+	// The animated wipe uses up the first second on the tick handler, so we need to be inanimate
+    // to make the first breath segment show up correctly
+    window_stack_push(window, false /* Not animated */);
+
+    GFont numfont = fonts_get_system_font(FONT_KEY_BITHAM_42_MEDIUM_NUMBERS);
+    GFont textfont = fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD);
+
+    // Initialize the strings that say how much time is remaining
+    itoa(current_breath_duration - current_breath_elapsed, breathstr);
+    itoa(DURATION_TOTAL - total_elapsed, totalstr);
+
+    // The text that says "IN/OUT/DONE"
+    instr_layer = text_layer_create(GRect(0, 0, 144, 50));
+    text_layer_set_text_alignment(instr_layer, GTextAlignmentCenter);
+    text_layer_set_text(instr_layer, "IN");
+    text_layer_set_font(instr_layer, textfont);
+    layer_add_child(window_get_root_layer(window), (Layer*)instr_layer);
+
+    // Text showing number of seconds remaining in current breath phase
+    breathtimer_layer = text_layer_create(GRect(0, 50, 144, 50));
+    text_layer_set_text_alignment(breathtimer_layer, GTextAlignmentCenter);
+    text_layer_set_text(breathtimer_layer, breathstr);
+    text_layer_set_font(breathtimer_layer, numfont);
+    layer_add_child(window_get_root_layer(window), (Layer*)breathtimer_layer);
+
+    // Text showing number of seconds remaining in total exercise
+    totaltimer_layer = text_layer_create(GRect(0, 100, 144, 50));
+    text_layer_set_text_alignment(totaltimer_layer, GTextAlignmentCenter);
+    text_layer_set_text(totaltimer_layer, totalstr);
+    text_layer_set_font(totaltimer_layer, numfont);
+    layer_add_child(window_get_root_layer(window), (Layer*)totaltimer_layer);
+}
+
+void handle_deinit() {
+	text_layer_destroy(totaltimer_layer);
+	text_layer_destroy(breathtimer_layer);
+	text_layer_destroy(instr_layer);
+	window_destroy(window);
+}
+
+
+int main(void) {
+	handle_init();
+	app_event_loop();
+	handle_deinit();
 }
