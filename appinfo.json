@@ -1,0 +1,15 @@
+{
+  "uuid": "c5b28173-4519-4ab6-adb1-647a6a0d8e05",
+  "shortName": "Breath Timer",
+  "longName": "Breath Timer",
+  "companyName": "Aaron Wells",
+  "versionCode": 1,
+  "versionLabel": "1.11.0",
+  "watchapp": {
+    "watchface": false
+  },
+  "appKeys": {},
+  "resources": {
+    "media": []
+  }
+}
